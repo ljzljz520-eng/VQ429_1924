@@ -12,7 +12,6 @@ import (
 
 type Exporter struct {
 	store *storage.Store
-	last  []model.ExportRow
 }
 
 func New(s *storage.Store) *Exporter { return &Exporter{store: s} }
@@ -30,13 +29,12 @@ func (e *Exporter) Rows(f model.Filter) ([]model.ExportRow, error) {
 		rows = append(rows, model.ExportRow{RecordID: r.ID, BatchID: r.BatchID, Name: r.Name, Owner: r.Owner, Domain: r.Domain, Status: string(r.Status), Tags: model.JoinTags(r.Tags), AuditCount: len(a)})
 	}
 	if len(rows) == 0 {
-		rows = nil
-	}
-	if rows == nil && e.last != nil {
-		return append([]model.ExportRow(nil), e.last...), nil
+		// Each query is independent: an empty result is the confirmed-empty
+		// state for this filter and must never leak rows computed for another
+		// batch, so return nil rather than falling back to a cached result.
+		return nil, nil
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].RecordID < rows[j].RecordID })
-	e.last = append([]model.ExportRow(nil), rows...)
 	return rows, nil
 }
 func (e *Exporter) CSV(w io.Writer, f model.Filter) error {
